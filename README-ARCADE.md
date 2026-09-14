@@ -106,6 +106,39 @@ La valeur par défaut est cette adresse. **Elle doit exister et servir ce dépô
 déploiement public : c'est l'offre elle-même, et une offre qui mène à une page absente ne
 vaut rien.
 
+## Publier ce dépôt
+
+**La relecture juridique est faite** (prérequis externe 18), et `Q164` était déjà tranché :
+on publie, la contrainte de la GPL-3.0 est acceptée.
+
+**Publier et déployer sont un seul geste**, et dans cet ordre. Le lien « Code source » de la
+barre de menu est l'offre qu'exige la licence ; une offre qui mène à une page absente ne vaut
+rien. Le dépôt doit donc exister **avant** que le sous-domaine serve quoi que ce soit.
+
+```bash
+gh repo create groupe-trousseau/arcade-editeur-blocs \
+  --public --source=. --remote=arcade --push
+```
+
+Le dépôt existe déjà ? Alors :
+
+```bash
+git remote add arcade https://github.com/groupe-trousseau/arcade-editeur-blocs.git
+git push arcade arcade       # la branche `arcade` porte nos six fichiers
+```
+
+**`--public`, et c'est le point** : un dépôt privé ne satisfait pas l'offre de source. Le
+nom est celui que `D-003` a tranché, et il ne porte ni « Scratch » ni « MakeCode ».
+
+**`origin` reste l'amont**, pour que la section « Rebaser sur l'amont » continue de marcher.
+Notre dépôt est un **second** distant, jamais `origin`.
+
+**L'historique de l'amont part avec.** Ce n'est pas une obligation de la licence, mais c'est
+ce qui rend nos modifications lisibles : six fichiers dans un seul commit, sur une base dont
+chacun peut vérifier la provenance.
+
+**Une publication ne se retire pas.** C'est pourquoi ce geste appartient au porteur.
+
 ## Déployer
 
 Site statique. **Aucun backend, aucune base, aucun cookie.**
