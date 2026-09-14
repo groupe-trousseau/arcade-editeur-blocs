@@ -180,7 +180,25 @@ module.exports = [
                 'process.env.ENABLE_SERVICE_WORKER': JSON.stringify(process.env.ENABLE_SERVICE_WORKER || ''),
                 'process.env.ROOT': JSON.stringify(root),
                 'process.env.ROUTING_STYLE': JSON.stringify(process.env.ROUTING_STYLE || 'filehash'),
-                'process.env.ENABLE_WINDCHIMES': JSON.stringify(process.env.ENABLE_WINDCHIMES || '')
+                'process.env.ENABLE_WINDCHIMES': JSON.stringify(process.env.ENABLE_WINDCHIMES || ''),
+                // Arcade : l'origine de la plateforme qui encadre cet éditeur.
+                // Le pont l'exige et refuse de s'installer sans elle. Jamais '*'.
+                'process.env.ORIGINE_PLATEFORME': JSON.stringify(process.env.ORIGINE_PLATEFORME || ''),
+                // Arcade : L'OFFRE DE SOURCE DE LA GPL-3.0, et elle n'est pas
+                // décorative. Servir cette sortie sur une adresse publique la
+                // distribue : le JavaScript part dans le navigateur de chaque
+                // élève. La licence oblige alors à offrir le source
+                // CORRESPONDANT, c'est-à-dire celui de CETTE version modifiée,
+                // et non celui du projet amont.
+                //
+                // Le pied de page du projet amont porte bien un lien « Source
+                // Code », mais il ne s'affiche que sur la page d'accueil : dans
+                // l'éditeur encadré, celui que l'élève voit, il n'y a rien. D'où
+                // le lien ajouté à la barre de menu.
+                'process.env.DEPOT_SOURCE': JSON.stringify(
+                    process.env.DEPOT_SOURCE ||
+                        'https://github.com/groupe-trousseau/arcade-editeur-blocs'
+                )
             }),
             new HtmlWebpackPlugin({
                 chunks: ['editor'],

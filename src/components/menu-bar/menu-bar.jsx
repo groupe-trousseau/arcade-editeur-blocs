@@ -107,6 +107,8 @@ import sharedMessages from '../../lib/shared-messages';
 import SeeInsideButton from './tw-see-inside.jsx';
 import {notScratchDesktop} from '../../lib/isScratchDesktop.js';
 import {APP_NAME} from '../../lib/brand.js';
+// Arcade : le drapeau du pont, pour fermer ce qui sort de l'éditeur.
+import {DEPOT_SOURCE, PONT_ACTIF} from '../../lib/pont-trousseau';
 
 const ariaMessages = defineMessages({
     tutorials: {
@@ -1012,7 +1014,16 @@ class MenuBar extends React.Component {
                         ) : []))}
                     </div>
                     {/* tw: add a feedback button */}
-                    <div className={styles.menuBarItem}>
+                    {/*
+                        Arcade : ce bouton sort de l'éditeur vers un site
+                        communautaire extérieur. `INTEGRATION` §4.1 point 2 fait
+                        retirer les entrées « inutiles ou dangereuses en contexte
+                        scolaire », et une adresse extérieure offerte à un enfant
+                        de six à onze ans en est une. Il disparaît dès que le
+                        pont est actif, c'est-à-dire dès que la plateforme
+                        encadre cet éditeur.
+                    */}
+                    {PONT_ACTIF ? null : <div className={styles.menuBarItem}>
                         <a
                             className={styles.feedbackLink}
                             href="https://scratch.mit.edu/users/GarboMuffin/#comments"
@@ -1031,7 +1042,45 @@ class MenuBar extends React.Component {
                                 />
                             </Button>
                         </a>
-                    </div>
+                    </div>}
+                    {/*
+                        Arcade : L'OFFRE DE SOURCE DE LA GPL-3.0, et elle est
+                        obligatoire, pas décorative.
+
+                        Servir cette sortie sur une adresse publique la
+                        distribue : le JavaScript part dans le navigateur de
+                        chaque élève. La licence oblige alors à offrir le source
+                        CORRESPONDANT, celui de cette version modifiée.
+
+                        Le pied de page du projet amont porte bien un lien
+                        « Source Code », mais il n'est rendu que sur la page
+                        d'accueil (`{isHomepage && <Footer />}` dans
+                        `render-interface.jsx`) : dans l'éditeur encadré, celui
+                        que l'élève voit, il n'y a rien. D'où ce lien-ci, rendu
+                        exactement quand le pont est actif.
+
+                        `rel="noopener noreferrer"` : l'adresse de cette page
+                        porte l'identifiant d'un élève, elle ne sort pas.
+                    */}
+                    {PONT_ACTIF && DEPOT_SOURCE ? (
+                        <div className={styles.menuBarItem}>
+                            <a
+                                className={styles.feedbackLink}
+                                href={DEPOT_SOURCE}
+                                rel="noopener noreferrer"
+                                target="_blank"
+                            >
+                                <Button className={styles.feedbackButton}>
+                                    <FormattedMessage
+                                        defaultMessage="Code source"
+                                        // eslint-disable-next-line max-len
+                                        description="Link to the source code of this modified version, required by the GPL"
+                                        id="arcade.codeSource"
+                                    />
+                                </Button>
+                            </a>
+                        </div>
+                    ) : null}
                 </div>
 
                 <div className={styles.accountInfoGroup}>

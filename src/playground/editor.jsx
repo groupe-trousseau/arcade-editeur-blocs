@@ -20,5 +20,8 @@ import React from 'react';
 
 import Interface from './render-interface.jsx';
 import render from './app-target';
+// Arcade : le pont décide des propriétés de l'interface — mode lecteur,
+// entrées de menu fermées. Voir src/lib/pont-trousseau.js.
+import {proprietesDeLInterface} from '../lib/pont-trousseau';
 
-render(<Interface />);
+render(<Interface {...proprietesDeLInterface()} />);

@@ -43,10 +43,15 @@ import {loadServiceWorker} from './load-service-worker';
 import runAddons from '../addons/entry';
 import InvalidEmbed from '../components/tw-invalid-embed/invalid-embed.jsx';
 import {APP_NAME} from '../lib/brand.js';
+// Arcade : le pont avec la plateforme. Un seul import, un seul fichier ajouté.
+import {installerPont, PONT_ACTIF} from '../lib/pont-trousseau';
 
 import styles from './interface.css';
 
-const isInvalidEmbed = window.parent !== window;
+// Arcade : encadrer cet éditeur est le mode NOMINAL du produit (D1), à la
+// condition que la plateforme ait déclaré son origine au build. Sans elle,
+// le refus d'origine de TurboWarp reste en place, et c'est la bonne réponse.
+const isInvalidEmbed = window.parent !== window && !PONT_ACTIF;
 
 const handleClickAddonSettings = addonId => {
     // addonId might be a string of the addon to focus on, undefined, or an event (treat like undefined)
@@ -57,7 +62,8 @@ const handleClickAddonSettings = addonId => {
 
 const messages = defineMessages({
     defaultTitle: {
-        defaultMessage: 'Run Scratch projects faster',
+        // Arcade : le nom de la marque n'est pas libre, le code l'est.
+        defaultMessage: 'l’éditeur de code par blocs',
         description: 'Title of homepage',
         id: 'tw.guiDefaultTitle'
     }
@@ -190,6 +196,20 @@ class Interface extends React.Component {
     constructor (props) {
         super(props);
         this.handleUpdateProjectTitle = this.handleUpdateProjectTitle.bind(this);
+        // Arcade : le démontage du pont, posé au montage.
+        this.demonterPont = null;
+    }
+    componentDidMount () {
+        // Arcade : une seule installation, avec le vm du magasin.
+        if (this.props.vm) {
+            this.demonterPont = installerPont(this.props.vm);
+        }
+    }
+    componentWillUnmount () {
+        if (this.demonterPont) {
+            this.demonterPont();
+            this.demonterPont = null;
+        }
     }
     componentDidUpdate (prevProps) {
         if (prevProps.isLoading && !this.props.isLoading) {
@@ -218,6 +238,7 @@ class Interface extends React.Component {
             isPlayerOnly,
             isRtl,
             projectId,
+            vm,
             /* eslint-enable no-unused-vars */
             ...props
         } = this.props;
@@ -378,7 +399,9 @@ const mapStateToProps = state => ({
     isLoading: getIsLoading(state.scratchGui.projectState.loadingState),
     isPlayerOnly: state.scratchGui.mode.isPlayerOnly,
     isRtl: state.locales.isRtl,
-    projectId: state.scratchGui.projectState.projectId
+    projectId: state.scratchGui.projectState.projectId,
+    // Arcade : le vm, que le pont pilote.
+    vm: state.scratchGui.vm
 });
 
 const mapDispatchToProps = () => ({});
