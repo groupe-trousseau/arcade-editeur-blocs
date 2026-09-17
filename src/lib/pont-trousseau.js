@@ -178,6 +178,59 @@ export const installerPont = vm => {
         }
     };
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // LES CHARGEMENTS PASSENT EN FILE, DERRIÈRE LE PROJET PAR DÉFAUT.
+    //
+    // TurboWarp charge SON projet par défaut au démarrage, sans rien savoir du
+    // pont, et la plateforme pousse son projet dès `trousseau:pret`. Deux
+    // `vm.loadProject` concurrents FUSIONNENT : chacun vide le runtime au début
+    // (`deserializeProject`) et ajoute ses cibles à la fin (`installTargets`),
+    // sans revider. Mesuré dans Arcade (arcade#87) : deux scènes, le sprite par
+    // défaut et celui de l'élève dans le même projet, un sprite vide de plus à
+    // chaque ouverture — ou, quand l'ordre s'inverse, le projet par défaut À LA
+    // PLACE de celui de l'élève.
+    //
+    // La file a donc pour premier maillon le chargement du projet par défaut :
+    // un `trousseau:charger` passe derrière lui, puis derrière le précédent, et
+    // REMPLACE ce qui est à l'écran au lieu de s'y ajouter. Un rendu attend
+    // aussi la file : il sérialise un projet entier, jamais un projet à moitié
+    // posé.
+    //
+    // `PROJECT_LOADED` est émis par `vm.runtime`, et non par le `vm`, qui ne le
+    // relaie pas. Des cibles déjà présentes veulent dire que le projet par
+    // défaut est posé : il n'y a rien à attendre.
+    // ─────────────────────────────────────────────────────────────────────────
+    let file = Promise.resolve();
+    const enFile = travail => {
+        const resultat = file.then(travail);
+        file = resultat.then(() => null, () => null);
+        return resultat;
+    };
+
+    // Les chargements en file ou en cours, celui du projet par défaut compris.
+    // Tant qu'il en reste un, une modification n'est pas un geste de l'élève.
+    let chargements = 0;
+    const compter = chargement => {
+        chargements += 1;
+        const fin = () => {
+            chargements -= 1;
+        };
+        chargement.then(fin, fin);
+        return chargement;
+    };
+
+    if (vm.runtime.targets.length === 0) {
+        const projetParDefaut = new Promise(resoudre => vm.runtime.once('PROJECT_LOADED', resoudre));
+        compter(enFile(() => projetParDefaut));
+    }
+
+    // Un projet vide vaut « page blanche » (`F-34`, `Q197`) : l'élève part du
+    // projet par défaut, et c'est le cahier des charges qui le demande.
+    // `vm.loadProject` refuserait zéro octet.
+    const charger = octets => compter(enFile(() => (
+        octets && octets.byteLength > 0 ? vm.loadProject(octets) : null
+    )));
+
     const surMessage = async e => {
         // Contrôle d'origine à la réception. Obligatoire.
         if (!ORIGINES_DECLAREES.includes(e.origin)) return;
@@ -188,12 +241,7 @@ export const installerPont = vm => {
 
         if (message.type === 'trousseau:charger') {
             try {
-                // Un projet vide vaut « page blanche » (`F-34`, `Q197`) :
-                // l'élève part de rien, et c'est le cahier des charges qui le
-                // demande. `vm.loadProject` refuserait zéro octet.
-                if (message.projet && message.projet.byteLength > 0) {
-                    await vm.loadProject(message.projet);
-                }
+                await charger(message.projet);
                 envoyer({type: 'trousseau:charge'});
             } catch (erreur) {
                 envoyer({
@@ -207,7 +255,7 @@ export const installerPont = vm => {
 
         if (message.type === 'trousseau:demander-rendu') {
             try {
-                const blob = await vm.saveProjectSb3();
+                const blob = await enFile(() => vm.saveProjectSb3());
                 const octets = await blob.arrayBuffer();
                 // 3e argument : la liste des transférables, qui évite une copie
                 // du tampon. Un `.sb3` d'élève avec des sons enregistrés au
@@ -236,7 +284,14 @@ export const installerPont = vm => {
     // Signal de modification, qui pilote la sauvegarde automatique côté parent.
     // Le pont n'écrit rien lui-même : il signale, et c'est la plateforme
     // authentifiée qui décide d'enregistrer.
-    const surModification = () => envoyer({type: 'trousseau:modifie'});
+    //
+    // **SILENCE PENDANT UN CHARGEMENT.** `scratch-vm` émet `PROJECT_CHANGED`
+    // pour chaque bloc qu'il crée en chargeant un projet : relayés, ces signaux
+    // faisaient enregistrer la plateforme à l'ouverture, sans aucun geste de
+    // l'élève (arcade#85, arcade#87).
+    const surModification = () => {
+        if (chargements === 0) envoyer({type: 'trousseau:modifie'});
+    };
     if (!MODE_LECTEUR) {
         vm.on('PROJECT_CHANGED', surModification);
     }
