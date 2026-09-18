@@ -5,6 +5,8 @@ const webpack = require('webpack');
 // Plugins
 const CopyWebpackPlugin = require('copy-webpack-plugin');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
+// Arcade : voir `MINIFICATION_PARALLELE` plus bas.
+const TerserPlugin = require('terser-webpack-plugin');
 
 // PostCss
 const autoprefixer = require('autoprefixer');
@@ -138,6 +140,27 @@ if (!process.env.CI) {
     base.plugins.push(new webpack.ProgressPlugin());
 }
 
+/**
+ * Arcade : BORNER LA MINIFICATION, parce qu'elle prend la machine entière.
+ *
+ * `terser-webpack-plugin` lance un processus par cœur MOINS UN, et dans un
+ * conteneur il voit tous les cœurs de la machine hôte, pas ceux qu'on lui a
+ * donnés. Mesuré sur seize cœurs, à froid : **7,0 Go de pic**, presque tout
+ * pendant la minification. Sur un serveur qui héberge autre chose, ce pic tombe
+ * sur les applications en service : le 2026-09-17, il a rendu un serveur entier
+ * injoignable pendant une heure.
+ *
+ * Borné à deux processus, le même build tient dans **2,7 Go** et rend un paquet
+ * identique, empreinte de contenu comprise — vérifié.
+ *
+ * Sans cette variable, le comportement d'origine ne bouge pas.
+ */
+if (process.env.MINIFICATION_PARALLELE) {
+    base.optimization = Object.assign({}, base.optimization, {
+        minimizer: [new TerserPlugin({parallel: Number(process.env.MINIFICATION_PARALLELE)})]
+    });
+}
+
 module.exports = [
     // to run editor examples
     defaultsDeep({}, base, {
@@ -263,7 +286,17 @@ module.exports = [
         ])
     })
 ].concat(
-    process.env.NODE_ENV === 'production' || process.env.BUILD_MODE === 'dist' ? (
+    /*
+     * Arcade : la bibliothèque UMD (`dist/`) ne se construit plus QUE sur
+     * demande, par `BUILD_MODE=dist`.
+     *
+     * Elle sert à `scratch-desktop`, qui embarque l'interface comme paquet.
+     * Arcade sert les pages de `build/`, et son image ne copie même pas
+     * `dist/` : en mode production, cette seconde configuration recompilait et
+     * reminifiait toute l'interface pour rien. Mesuré : 7,0 Go de pic et 24 s
+     * avec, 5,1 Go et 17 s sans, pour un paquet servi identique.
+     */
+    process.env.BUILD_MODE === 'dist' ? (
         // export as library
         defaultsDeep({}, base, {
             target: 'web',

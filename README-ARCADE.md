@@ -40,7 +40,10 @@ rebases sur l'amont tenables — §4.1.
 | `src/playground/editor.jsx` | modifié | passe à l'interface les propriétés que le pont décide |
 | `src/components/menu-bar/menu-bar.jsx` | modifié | retire le bouton de retour, qui **sort vers un site communautaire extérieur** ; ajoute le lien **« Code source »** qu'exige la GPL |
 | `src/lib/brand.js` | modifié | `APP_NAME` |
-| `webpack.config.js` | modifié | injecte `ORIGINE_PLATEFORME` et `DEPOT_SOURCE` par `DefinePlugin` |
+| `webpack.config.js` | modifié | injecte `ORIGINE_PLATEFORME` et `DEPOT_SOURCE` par `DefinePlugin` ; borne la minification sur `MINIFICATION_PARALLELE` ; ne construit la bibliothèque `dist/` que sur `BUILD_MODE=dist` |
+| `Dockerfile`, `nginx-arcade.conf` | **ajoutés** | l'image servie : construction puis nginx, en-têtes du §« Déployer » |
+| `Dockerfile.image` | **ajouté** | celui qu'emploie la plateforme : il ne compile rien, il **tire** l'image publiée |
+| `.github/workflows/image.yml` | **ajouté** | construit et publie l'image, **hors du serveur qui sert Arcade** |
 
 ### Ce que le pont ferme, et pourquoi
 
@@ -65,8 +68,50 @@ npm ci                       # ci, PAS install : voir LICENCES.md, les commits �
 NODE_ENV=production \
 ORIGINE_PLATEFORME="https://l-arcade.fr,https://admin.l-arcade.fr" \
 ROUTING_STYLE=filehash \
+MINIFICATION_PARALLELE=2 \
 npx webpack --bail           # sortie statique dans build/
 ```
+
+### Cette construction prend la machine entière, et c'est mesuré
+
+`terser-webpack-plugin` minifie avec **un processus par cœur moins un**, et dans un conteneur
+il voit les cœurs de la machine **hôte**, pas ceux qu'on lui a donnés. Mesuré à froid sur
+seize cœurs : **7,0 Go de pic** et 24 s. Le 2026-09-17, la plateforme de déploiement a
+reconstruit cette image sur le serveur qui héberge la production d'Arcade : tout le serveur
+est resté injoignable une heure, et la construction a fini en échec sans laisser de journal.
+
+Deux variables la ramènent à **2,7 Go**, pour un paquet servi **identique**, empreinte de
+contenu comprise :
+
+| Variable | Ce qu'elle fait | Mesure |
+|---|---|---|
+| `MINIFICATION_PARALLELE=2` | borne le nombre de processus de minification | 5,1 → 2,7 Go |
+| `BUILD_MODE` non posée | ne construit plus la bibliothèque UMD de `dist/`, qu'Arcade n'utilise pas et que l'image ne copie pas | 7,0 → 5,1 Go, 24 → 17 s |
+
+Le `Dockerfile` pose déjà `MINIFICATION_PARALLELE=2`.
+
+### L'image se construit dans l'intégration continue, pas sur le serveur
+
+`.github/workflows/image.yml` construit et publie l'image à chaque poussée sur `arcade`, sur
+une machine jetable de GitHub — le dépôt est public, ces minutes ne coûtent rien. Il peut
+aussi se lancer à la main, en choisissant l'environnement.
+
+```
+ghcr.io/groupe-trousseau/arcade-editeur-blocs:recette
+ghcr.io/groupe-trousseau/arcade-editeur-blocs:recette-<douze premiers caractères du commit>
+```
+
+L'étiquette mouvante sert au déploiement courant, celle qui porte le commit sert à revenir en
+arrière. La plateforme de déploiement ne construit plus rien : **elle tire cette image**, par
+`Dockerfile.image`, dont l'unique instruction est un `FROM`. Son champ « Dockerfile Location »
+vaut donc `/Dockerfile.image`, et sa variable de construction `ETIQUETTE` dit quelle image
+servir. Le paquet du registre doit être **public**, sans quoi la plateforme ne peut pas le
+tirer.
+
+Le workflow ne se contente pas de construire : il ouvre le paquet servi et vérifie que les
+origines de l'environnement **et** la mise en file des chargements y sont. Une image qui
+démarre ne prouve rien — sans ses origines, le pont ne s'installe pas et l'éditeur refuse
+d'être encadré, en silence.
 
 ### `ORIGINE_PLATEFORME` est obligatoire, et c'est délibéré
 
@@ -154,6 +199,10 @@ marques ne le sont pas.
 Servir `build/` tel quel. **`cleanUrls` doit être désactivé** : la plateforme attend
 `editor.html`, et un serveur qui réécrit `/editor.html` en `/editor` casse le cadre sans
 rien dire. Constaté en local avec `serve`.
+
+**La plateforme de déploiement ne construit plus cette image, elle la tire** : voir
+« L'image se construit dans l'intégration continue ». Y reconstruire l'éditeur a rendu un
+serveur entier injoignable pendant une heure, le 2026-09-17.
 
 ### En-têtes à poser au niveau du proxy
 

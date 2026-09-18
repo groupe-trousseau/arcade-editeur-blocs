@@ -1,0 +1,108 @@
+# L'IMAGE DE L'ÉDITEUR SE CONSTRUIT ICI, ET PLUS SUR LE SERVEUR QUI SERT ARCADE.
+#
+# POURQUOI CE FICHIER EXISTE. Le 2026-09-17, la plateforme de déploiement a
+# reconstruit cette image sur le serveur qui héberge la production : la
+# minification lance un processus par cœur moins un, mesuré à 7,0 Go de pic sur
+# seize cœurs, et tout le serveur est devenu injoignable pendant une heure. La
+# construction a fini en échec, sans laisser de journal.
+#
+# Ici, elle tourne sur une machine jetable de GitHub, et le serveur ne fait plus
+# que TIRER l'image publiée. Le dépôt est public : ces minutes ne coûtent rien.
+#
+# CE QUE CE FICHIER NE CHANGE PAS : le paquet servi. Les deux allègements posés
+# en même temps (pas de bibliothèque `dist/`, minification bornée) rendent un
+# éditeur à l'empreinte de contenu identique — vérifié avant de les poser.
+
+name: Image de l'éditeur
+
+on:
+  push:
+    branches: [arcade]
+  workflow_dispatch:
+    inputs:
+      environnement:
+        description: Environnement dont on construit l'image
+        type: choice
+        options: [recette, production]
+        default: recette
+
+# Deux constructions en parallèle sur la même branche ne servent à rien : la
+# seconde écraserait l'étiquette de la première.
+concurrency:
+  group: image-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/groupe-trousseau/arcade-editeur-blocs
+
+jobs:
+  image:
+    name: Construire et publier l'image
+    runs-on: ubuntu-latest
+
+    steps:
+      # Empreinte de commit et non étiquette : une étiquette d'action est
+      # mutable, son propriétaire peut la repointer sur du code qui s'exécutera
+      # avec le jeton du dépôt.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.2.2
+
+      # ORIGINE_PLATEFORME est une LISTE FERMÉE, injectée au build, et c'est ce
+      # qui empêche n'importe quelle page d'encadrer cet éditeur et de lire le
+      # projet d'un enfant. Deux origines par environnement : le front de
+      # l'élève et l'espace d'administration (README-ARCADE.md). Ce ne sont pas
+      # des secrets : ce sont des adresses que le navigateur charge.
+      - name: Les origines de l'environnement
+        id: cible
+        run: |
+          set -euo pipefail
+          environnement="${{ inputs.environnement || 'recette' }}"
+          case "$environnement" in
+            recette)
+              origines="https://app.recette.l-arcade.fr,https://admin.recette.l-arcade.fr" ;;
+            production)
+              origines="https://l-arcade.fr,https://admin.l-arcade.fr" ;;
+            *)
+              echo "environnement inconnu : $environnement" >&2; exit 1 ;;
+          esac
+          echo "environnement=$environnement" >> "$GITHUB_OUTPUT"
+          echo "origines=$origines" >> "$GITHUB_OUTPUT"
+
+      - name: Entrer dans le registre
+        run: echo '${{ secrets.GITHUB_TOKEN }}' | docker login ghcr.io -u '${{ github.actor }}' --password-stdin
+
+      - name: Construire l'image
+        run: |
+          set -euo pipefail
+          docker build \
+            --build-arg ORIGINE_PLATEFORME='${{ steps.cible.outputs.origines }}' \
+            -t "$IMAGE:${{ steps.cible.outputs.environnement }}" \
+            -t "$IMAGE:${{ steps.cible.outputs.environnement }}-${GITHUB_SHA:0:12}" \
+            .
+
+      # UNE IMAGE QUI DÉMARRE NE PROUVE RIEN : sans ses origines, le pont ne
+      # s'installe pas et l'éditeur refuse d'être encadré, en silence. On regarde
+      # donc DEDANS le paquet que le navigateur téléchargera.
+      - name: Vérifier le paquet servi
+        run: |
+          set -euo pipefail
+          conteneur=$(docker create "$IMAGE:${{ steps.cible.outputs.environnement }}")
+          docker cp "$conteneur:/usr/share/nginx/html/editor.html" editor.html
+          paquet=$(grep -o 'js/pentapod/editor\.[a-z0-9]*\.js' editor.html)
+          docker cp "$conteneur:/usr/share/nginx/html/$paquet" paquet.js
+          docker rm "$conteneur" > /dev/null
+          grep -q '${{ steps.cible.outputs.origines }}' paquet.js \
+            || { echo "les origines de la plateforme ne sont pas dans le paquet" >&2; exit 1; }
+          grep -q 'once("PROJECT_LOADED"' paquet.js \
+            || { echo "la mise en file des chargements n'est pas dans le paquet" >&2; exit 1; }
+          echo "OK : $paquet porte les origines et la mise en file des chargements."
+
+      - name: Publier l'image
+        run: |
+          set -euo pipefail
+          docker push "$IMAGE:${{ steps.cible.outputs.environnement }}"
+          docker push "$IMAGE:${{ steps.cible.outputs.environnement }}-${GITHUB_SHA:0:12}"
+          echo "Publiée : $IMAGE:${{ steps.cible.outputs.environnement }}"

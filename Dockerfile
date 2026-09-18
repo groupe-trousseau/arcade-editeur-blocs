@@ -4,6 +4,12 @@
 # ORIGINE_PLATEFORME est OBLIGATOIRE et sans défaut : sans elle, le pont ne
 # s'installe pas. Sur la plateforme de déploiement, c'est une variable de
 # CONSTRUCTION (les origines app et admin de l'environnement).
+#
+# CETTE IMAGE SE CONSTRUIT DANS L'INTÉGRATION CONTINUE, PAS SUR LE SERVEUR QUI
+# SERT LA PRODUCTION : voir `.github/workflows/image.yml` et README-ARCADE.md.
+# Construire ici prend plusieurs gigaoctets et plusieurs minutes ; le
+# 2026-09-17, cette construction a rendu un serveur entier injoignable pendant
+# une heure. `MINIFICATION_PARALLELE` borne le poste le plus lourd.
 
 FROM node:24-bookworm-slim AS construction
 WORKDIR /src
@@ -18,6 +24,7 @@ RUN test -n "$ORIGINE_PLATEFORME" || (echo "ORIGINE_PLATEFORME manque" >&2; exit
 ENV NODE_ENV=production \
     ROUTING_STYLE=filehash \
     NODE_OPTIONS=--max-old-space-size=4096 \
+    MINIFICATION_PARALLELE=2 \
     ORIGINE_PLATEFORME=$ORIGINE_PLATEFORME \
     DEPOT_SOURCE=$DEPOT_SOURCE
 RUN npx webpack --bail && test -f build/editor.html

@@ -1,0 +1,22 @@
+# TIRER L'IMAGE DÉJÀ CONSTRUITE, ET NE RIEN CONSTRUIRE ICI.
+#
+# C'est le `Dockerfile` que la plateforme de déploiement emploie (champ
+# « Dockerfile Location »). Il ne compile rien : il prend l'image publiée par
+# `.github/workflows/image.yml` et s'arrête là. La construction complète vit
+# dans le `Dockerfile` d'à côté, et elle tourne sur une machine jetable de
+# GitHub.
+#
+# POURQUOI. Le 2026-09-17, cette construction lancée sur le serveur qui héberge
+# la production a rendu ce serveur injoignable pendant une heure, tous produits
+# confondus : la minification prend un processus par cœur et 7,0 Go de pic.
+#
+# `ETIQUETTE` porte l'étiquette de l'image, et elle se pose en variable de
+# CONSTRUCTION sur la plateforme. Poser `recette-<commit>` plutôt que `recette`
+# fixe exactement ce qui est servi, et revenir en arrière n'est alors qu'un
+# changement de variable — sans reconstruire quoi que ce soit.
+#
+# L'image de base porte déjà son `EXPOSE`, son `CMD` et sa sonde : un enfant
+# direct en hérite, et il n'y a rien à répéter ici.
+
+ARG ETIQUETTE=recette
+FROM ghcr.io/groupe-trousseau/arcade-editeur-blocs:${ETIQUETTE}
