@@ -64,7 +64,7 @@ jobs:
             recette)
               origines="https://app.recette.l-arcade.fr,https://admin.recette.l-arcade.fr" ;;
             production)
-              origines="https://l-arcade.fr,https://admin.l-arcade.fr" ;;
+              origines="https://app.l-arcade.fr,https://admin.l-arcade.fr" ;;
             *)
               echo "environnement inconnu : $environnement" >&2; exit 1 ;;
           esac
